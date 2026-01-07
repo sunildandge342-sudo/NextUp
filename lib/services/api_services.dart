@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // ⚙️ Replace with your backend IP and port
-  static const String baseUrl = "http://10.199.8.24:8080";
+  static const String baseUrl = "http://192.168.1.40:8080";
 
   /// ✅ Generic POST request for reusability
   static Future<Map<String, dynamic>> postRequest(

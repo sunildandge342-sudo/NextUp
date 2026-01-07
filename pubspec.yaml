@@ -12,17 +12,23 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Commonly used packages
+
+  mobile_scanner: ^3.5.0
   http: ^1.2.0
   url_launcher: ^6.3.0
+  shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.8
+
+  # ✅ Properly placed
+
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  flutter_launcher_icons: ^0.14.4  # 👈 move it here
+  flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.0
+
 # ------------------------------
 # 🖼️ Flutter assets configuration
 # ------------------------------
@@ -30,7 +36,13 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/images/signup.png
+    - assets/images/welcome.jpg
     - assets/images/nextup_logo.jpg
+    - assets/icons/google.png
+    - assets/icons/facebook.png
+    - assets/icons/apple.png
+    - assets/icons/x.png
 
 # ------------------------------
 # 🚀 Launcher icon configuration
@@ -41,8 +53,11 @@ flutter_launcher_icons:
   image_path: "assets/images/nextup_logo.jpg"
   min_sdk_android: 21
 
+# ------------------------------
+# 💧 Splash screen configuration
+# ------------------------------
 flutter_native_splash:
-  color: "#ffffff"  # background color (white)
+  color: "#ffffff"
   image: assets/images/nextup_logo.jpg
   android_12:
     image: assets/images/nextup_logo.jpg

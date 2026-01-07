@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
 
@@ -20,7 +19,7 @@ class HelpPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Help & Support'),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: Colors.deepPurple.shade100,
         centerTitle: true,
       ),
       body: SingleChildScrollView(
