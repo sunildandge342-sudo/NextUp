@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:nextup/screens/admin_dashboard.dart';
 import 'dart:convert';
 import 'login_screen.dart';
+import 'package:nextup/services/facebook_auth_service.dart';
+import 'package:nextup/services/google_auth_service.dart';
+import 'package:nextup/services/api_services.dart';
 
+import 'package:nextup/screens/dashboard/dashboard_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -20,6 +27,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isLoading = false;
   bool _obscure = true;
   bool _validateNow = false;
+  bool _isServiceProvider = false;
+
 
   final String baseUrl = "http://192.168.1.40:8080/api/auth/signup";
 
@@ -49,24 +58,97 @@ class _SignUpScreenState extends State<SignUpScreen> {
         hasDigit &&
         hasSpecial;
   }
+  bool showOtpSection = false;
+  bool isOtpVerified = false;
+  bool isRequestingOtp = false;
+  bool isEmailValid = false;
+
+
+  String? emailVerifiedToken;
+
+  final TextEditingController otpController = TextEditingController();
+
 
   // ================= REGISTER USER =================
+  Future<void> _requestOtp() async {
+    final email = emailController.text.trim();
+
+    if (!_isValidEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid email')),
+      );
+      return;
+    }
+
+    setState(() => isRequestingOtp = true);
+
+    try {
+      await ApiService.requestSignupOtp(email);
+
+      setState(() {
+        showOtpSection = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OTP sent to email')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      setState(() => isRequestingOtp = false);
+    }
+  }
+
+  Future<void> _verifyOtp() async {
+    try {
+      emailVerifiedToken = await ApiService.verifySignupOtp(
+        email: emailController.text.trim(),
+        otp: otpController.text.trim(),
+      );
+
+      setState(() => isOtpVerified = true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email verified successfully')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
 
   Future<void> _registerUser() async {
     setState(() => _validateNow = true);
-    print("📡 URL: $baseUrl");
 
     if (!_formKey.currentState!.validate()) return;
 
+    // 🔐 Ensure OTP is verified
+    if (!isOtpVerified || emailVerifiedToken == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please verify your email first')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
-    final url = Uri.parse(baseUrl);
-    final headers = {'Content-Type': 'application/json'};
-    final Map<String, dynamic> body = {
+    final url = Uri.parse("http://192.168.1.40:8080/auth/signup");
+
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $emailVerifiedToken', // ✅ THIS WAS MISSING
+    };
+
+    final body = {
       "name": nameController.text.trim(),
       "email": emailController.text.trim(),
       "password": passwordController.text.trim(),
       "phone": phoneController.text.trim(),
+      "role": _isServiceProvider ? "SERVICE_PROVIDER" : "USER",
     };
 
     try {
@@ -75,8 +157,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       if (response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✅ Account created successfully")),
+          const SnackBar(
+            content: Text("✅ Account created successfully. Please login."),
+          ),
         );
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -84,17 +169,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
       } else {
         final error = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ ${error['message']}")),
+          SnackBar(content: Text(error['message'] ?? 'Signup failed')),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("⚠️ Server not reachable")),
       );
+    } finally {
+      setState(() => _isLoading = false);
     }
-
-    setState(() => _isLoading = false);
   }
+
 
   // ================= UI =================
 
@@ -159,21 +245,46 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 : AutovalidateMode.disabled,
                             child: Column(
                               children: [
-                                _buildField(
-                                  controller: nameController,
-                                  label: 'Full Name',
-                                  icon: Icons.person_outline,
-                                  validator: (v) =>
-                                  v == null || v.trim().isEmpty
-                                      ? 'Full name is required'
-                                      : null,
-                                ),
+                              _buildField(
+                              controller: nameController,
+                              label: 'Full Name',
+                              icon: Icons.person_outline,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Full name is required';
+                                }
+
+                                final name = v.trim();
+
+                                if (!RegExp(r'^[A-Za-z ]+$').hasMatch(name)) {
+                                  return 'Name must contain only letters';
+                                }
+
+                                if (name.length < 2) {
+                                  return 'Name must be at least 2 characters';
+                                }
+
+                                return null;
+                              },
+                            ),
+
                                 const SizedBox(height: 12),
+
+// -------- EMAIL FIELD --------
                                 _buildField(
                                   controller: emailController,
                                   label: 'Email',
                                   icon: Icons.email_outlined,
                                   keyboardType: TextInputType.emailAddress,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      isEmailValid = _isValidEmail(value.trim());
+                                      if (!isEmailValid) {
+                                        showOtpSection = false;
+                                        isOtpVerified = false;
+                                      }
+                                    });
+                                  },
                                   validator: (v) {
                                     if (v == null || v.trim().isEmpty) {
                                       return 'Email is required';
@@ -184,6 +295,146 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     return null;
                                   },
                                 ),
+
+
+                                const SizedBox(height: 8),
+
+// -------- SEND OTP BUTTON (ONLY BEFORE OTP SECTION OPENS) --------
+                                if (isEmailValid && !showOtpSection)
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: ElevatedButton(
+                                      onPressed: isRequestingOtp ? null : _requestOtp,
+                                      style: ElevatedButton.styleFrom(
+                                        elevation: 0,
+                                        backgroundColor: Colors.transparent,
+                                        disabledBackgroundColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                      child: Ink(
+                                        decoration: BoxDecoration(
+                                          gradient: isRequestingOtp
+                                              ? LinearGradient(
+                                            colors: [
+                                              Colors.grey.shade400,
+                                              Colors.grey.shade400,
+                                            ],
+                                          )
+                                              : const LinearGradient(
+                                            colors: [
+                                              Color(0xFF6A5AE0), // premium purple
+                                              Color(0xFF4D9DE0), // soft blue
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        child: Center(
+                                          child: isRequestingOtp
+                                              ? const SizedBox(
+                                            height: 22,
+                                            width: 22,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.4,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                              : const Text(
+                                            'Verify Email',
+                                            style: TextStyle(
+                                              fontSize: 15.5,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.4,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                // -------- OTP SECTION (APPEARS AFTER OTP IS SENT) --------
+                                if (showOtpSection) ...[
+                                  const SizedBox(height: 12),
+
+                                  TextFormField(
+                                    controller: otpController,
+                                    keyboardType: TextInputType.number,
+                                    maxLength: 6,
+                                    decoration: InputDecoration(
+                                      labelText: 'Enter OTP',
+                                      prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF4A6CF7)),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF8F9FB),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(color: Colors.transparent),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(color: Color(0xFF4A6CF7), width: 1.6),
+                                      ),
+                                      counterText: '',
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 8),
+
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 48,
+                                    child: ElevatedButton(
+                                      onPressed: isOtpVerified ? null : _verifyOtp,
+                                      style: ElevatedButton.styleFrom(
+                                        elevation: 0,
+                                        backgroundColor: Colors.transparent,
+                                        disabledBackgroundColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                      ),
+                                      child: Ink(
+                                        decoration: BoxDecoration(
+                                          gradient: isOtpVerified
+                                              ? LinearGradient(
+                                            colors: [
+                                              Colors.green.shade400,
+                                              Colors.green.shade600,
+                                            ],
+                                          )
+                                              : const LinearGradient(
+                                            colors: [
+                                              Color(0xFF6A5AE0),
+                                              Color(0xFF4D9DE0),
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            isOtpVerified ? 'Verified ✓' : 'Verify OTP',
+                                            style: const TextStyle(
+                                              fontSize: 15.5,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.4,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+
+
+
+
+
+
                                 const SizedBox(height: 12),
                                 _buildField(
                                   controller: phoneController,
@@ -246,31 +497,159 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     return null;
                                   },
                                 ),
+                                const SizedBox(height: 8),
+
+                                Row(
+                                  children: [
+                                    Checkbox(
+                                      value: _isServiceProvider,
+                                      activeColor: const Color(0xFF4A6CF7),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _isServiceProvider = value ?? false;
+                                        });
+                                      },
+                                    ),
+                                    const Expanded(
+                                      child: Text(
+                                        'Register as Service Provider',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: Colors.black87,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
                                 const SizedBox(height: 16),
                                 SizedBox(
                                   width: double.infinity,
-                                  height: 52,
-                                  child: ElevatedButton(
-                                    onPressed:
-                                    _isLoading ? null : _registerUser,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                      const Color(0xFF4A6CF7),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                  height: 54,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFF6A8CFF), // light blue
+                                          Color(0xFF4A6CF7), // primary blue
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Color(0xFF4A6CF7).withOpacity(0.35),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
                                     ),
-                                    child: _isLoading
-                                        ? const CircularProgressIndicator(
-                                        color: Colors.white)
-                                        : const Text(
-                                      'Sign Up',
-                                      style: TextStyle(
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w600),
+                                    child: ElevatedButton(
+                                      onPressed: _isLoading ? null : _registerUser,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                      ),
+                                      child: _isLoading
+                                          ? const SizedBox(
+                                        height: 22,
+                                        width: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                          : const Text(
+                                        'Sign Up',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.6,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
+                                const SizedBox(height: 24),
+
+                                const Text(
+                                  "Or sign up with",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF6B7280),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+
+                                ),
+
+                                const SizedBox(height: 14),
+
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _socialButton(
+                                        asset: 'assets/icons/google.png',
+                                        label: 'Google',
+                                        onTap: () async {
+                                          final token = await GoogleAuthService.signIn();
+
+                                          if (token == null) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text("...")),
+                                            );
+                                            return;
+                                          }
+
+                                          final data = await ApiService.socialLogin("GOOGLE", token);
+
+                                          if (data == null) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text("Social login failed")),
+                                            );
+                                            return;
+                                          }
+
+                                          // ✅ SAVE JWT
+                                          final prefs = await SharedPreferences.getInstance();
+                                          await prefs.setString('token', data['token']);
+
+                                          final role = data['role'].toString().toUpperCase();
+                                          final userId = int.tryParse(data['userId'].toString()) ?? 0;
+
+                                          // ✅ NAVIGATE (SAME AS NORMAL LOGIN)
+                                          if (role == 'SERVICE_PROVIDER') {
+                                            Navigator.pushReplacement(
+                                              context,
+                                              MaterialPageRoute(builder: (_) => const AdminDashboard()),
+                                            );
+                                          } else {
+                                            Navigator.pushReplacement(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => UserDashboard(userId: userId),
+                                              ),
+                                            );
+                                          }
+                                        },
+
+                                        // Google signup logic (same as login)
+
+                                      ),
+                                    ),
+
+                                  ],
+                                ),
+
+
                               ],
                             ),
                           ),
@@ -316,10 +695,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
+    void Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF4A6CF7)),
@@ -339,6 +720,46 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
       validator: validator ??
               (v) => v == null || v.trim().isEmpty ? 'Enter $label' : null,
+    );
+  }
+  Widget _socialButton({
+    required String asset,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFE2E6F3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              asset,
+              height: 22,
+              width: 22,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF2C3E50),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

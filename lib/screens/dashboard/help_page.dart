@@ -36,7 +36,7 @@ class HelpPage extends StatelessWidget {
             const Text(
               'NextUp is a Virtual Queue Management System designed to eliminate long physical lines. '
                   'It allows users to join queues remotely and get notified when their turn is approaching. '
-                  'Admins can manage services, issue tokens, and monitor real-time activity.',
+                  'Service Providers can manage services, issue tokens, and monitor real-time activity.',
               style: TextStyle(fontSize: 15, height: 1.5),
             ),
 
@@ -62,7 +62,7 @@ class HelpPage extends StatelessWidget {
 
             _buildStepsCard(
               context,
-              'For Admins',
+              'For Service Providers',
               [
                 '1️⃣ Register as an Admin from the signup screen.',
                 '2️⃣ Add your service details (name, timings, etc.).',

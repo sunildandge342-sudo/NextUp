@@ -121,7 +121,7 @@ class _AccountPageState extends State<AccountPage> {
                         width: 180,
                         child: TextField(
                           controller: nameController,
-                          enabled: editName,
+                          readOnly: !editName,
                           textAlign: TextAlign.center,
                           decoration: const InputDecoration(
                             border: InputBorder.none,
@@ -129,6 +129,7 @@ class _AccountPageState extends State<AccountPage> {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
+                            color: Colors.black87, // ✅ ONLY CHANGE
                           ),
                           onChanged: (_) => setState(() {}),
                         ),
@@ -161,19 +162,6 @@ class _AccountPageState extends State<AccountPage> {
               enabled: editEmail,
               onEdit: () => setState(() => editEmail = true),
             ),
-
-            _editableTile(
-              title: "Change Password",
-              icon: Icons.lock_outline,
-              controller: TextEditingController.fromValue(
-                const TextEditingValue(text: "********"),
-              ),
-
-              enabled: false,
-              obscure: true,
-              onEdit: _showChangePasswordDialog,
-            ),
-
 
             _editableTile(
               title: "Mobile",
@@ -218,6 +206,7 @@ class _AccountPageState extends State<AccountPage> {
               ),
 
             const SizedBox(height: 16),
+
             /// SEND FEEDBACK
             SizedBox(
               width: double.infinity,
@@ -261,13 +250,13 @@ class _AccountPageState extends State<AccountPage> {
                   ),
                 ),
                 onPressed: _showLogoutConfirmation,
-
               ),
             ),
           ],
         ),
       ),
     );
+
   }
   // ================= LOAD USER PROFILE =================
   Future<void> _loadUserProfile() async {
@@ -333,7 +322,7 @@ class _AccountPageState extends State<AccountPage> {
 
     try {
       final response = await http.put(
-        Uri.parse("http://192.168.1.40:8080/api/user/profile"),
+        Uri.parse("http://http://192.168.1.40:8080/api/user/profile"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -358,164 +347,7 @@ class _AccountPageState extends State<AccountPage> {
       setState(() => _isSaving = false);
     }
   }
-  // ================= CHANGE PASSWORD DIALOG =================
-  // ================= CHANGE PASSWORD DIALOG =================
-  void _showChangePasswordDialog() {
-    final oldPassCtrl = TextEditingController();
-    final newPassCtrl = TextEditingController();
-    final confirmPassCtrl = TextEditingController();
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-          child: Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                /// TITLE
-                const Text(
-                  "Change Password",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  "Choose a strong password to keep your account secure.",
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                /// OLD PASSWORD
-                TextField(
-                  controller: oldPassCtrl,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "Old Password",
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                /// NEW PASSWORD
-                TextField(
-                  controller: newPassCtrl,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "New Password",
-                    helperText:
-                    "Minimum 8 characters, uppercase, lowercase, number & symbol",
-                    helperMaxLines: 2,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                /// CONFIRM PASSWORD
-                TextField(
-                  controller: confirmPassCtrl,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "Confirm Password",
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                /// ACTION BUTTON
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      "Update Password",
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    onPressed: () async {
-                      final oldPass = oldPassCtrl.text.trim();
-                      final newPass = newPassCtrl.text.trim();
-                      final confirmPass = confirmPassCtrl.text.trim();
-
-                      if (oldPass.isEmpty ||
-                          newPass.isEmpty ||
-                          confirmPass.isEmpty) {
-                        _showError("All fields are required");
-                        return;
-                      }
-
-                      if (oldPass == newPass) {
-                        _showError(
-                            "New password must be different from old password");
-                        return;
-                      }
-
-                      if (newPass != confirmPass) {
-                        _showError("Passwords do not match");
-                        return;
-                      }
-
-                      if (!_isStrongPassword(newPass)) {
-                        _showError(
-                          "Password must contain:\n"
-                              "• At least 8 characters\n"
-                              "• Uppercase letter\n"
-                              "• Lowercase letter\n"
-                              "• Number\n"
-                              "• Special character",
-                        );
-                        return;
-                      }
-
-                      final success =
-                      await _changePasswordApi(oldPass, newPass);
-
-                      if (success) {
-                        Navigator.pop(context);
-                        _showSuccess("Password updated successfully");
-                      }
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-
-// ================= CHANGE PASSWORD =================
-  // ================= CHANGE PASSWORD API =================
   Future<bool> _changePasswordApi(String oldPassword, String newPassword) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
@@ -527,7 +359,7 @@ class _AccountPageState extends State<AccountPage> {
 
     try {
       final response = await http.put(
-        Uri.parse("http://192.168.1.40:8080/api/user/change-password"),
+        Uri.parse("http://192.168.1.40:8080/api/user/reset-password"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -643,7 +475,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
   // ================= SEND FEEDBACK =================
-  // ================= SEND FEEDBACK =================
+
   Future<void> _sendFeedback() async {
     final String email = "sunil.cs24024@mmcc.edu.in";
     final String subject = "NextUp App Feedback";
@@ -653,7 +485,7 @@ class _AccountPageState extends State<AccountPage> {
         "-------------------------%0D%0A"
         "Name: ${nameController.text}%0D%0A"
         "Email: ${emailController.text}%0D%0A"
-        "Mobile: ${mobileController.text}%0D%0A"
+
         "-------------------------%0D%0A%0D%0A";
 
     // 1️⃣ Try default mail app
@@ -698,8 +530,6 @@ class _AccountPageState extends State<AccountPage> {
 
     _showError("Unable to open email. Please try again later.");
   }
-
-
 
   // ================= COMMON UI =================
   Widget _editableTile({

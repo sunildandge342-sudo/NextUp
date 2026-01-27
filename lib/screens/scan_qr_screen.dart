@@ -24,7 +24,7 @@ class _ScanQRScreenState extends State<ScanQRScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://10.0.2.2:8080/api/token/join"),
+        Uri.parse("http://10.28.43.24:8080/api/token/join"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "userId": widget.userId,
