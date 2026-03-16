@@ -142,10 +142,13 @@ public class AuthController {
             @RequestBody SignupRequest request,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        // 🔐 Require email verification token
+        // 🔐 1️⃣ Require email verification token
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Email verification required"));
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Email verification required"
+                    ));
         }
 
         String token = authHeader.substring(7);
@@ -155,31 +158,47 @@ public class AuthController {
             verifiedEmail = jwtUtil.extractEmail(token);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Invalid or expired verification token"));
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Invalid or expired verification token"
+                    ));
         }
 
+        // 🔐 2️⃣ Ensure token email matches request email
         if (!verifiedEmail.equals(request.getEmail())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Email not verified"));
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Email not verified"
+                    ));
         }
 
-        // ✅ EXISTING VALIDATIONS (UNCHANGED)
+        // ✅ 3️⃣ Basic validations
         if (request.getEmail() == null || request.getEmail().isBlank()) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Email is required"));
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Email is required"
+                    ));
         }
 
         if (request.getPassword() == null || request.getPassword().isBlank()) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("message", "Password is required"));
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Password is required"
+                    ));
         }
 
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("message", "Email already registered"));
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Email already registered"
+                    ));
         }
 
-        // ✅ CREATE USER (ONLY HERE)
+        // ✅ 4️⃣ Create User (ONLY after verification)
         User user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
@@ -192,12 +211,18 @@ public class AuthController {
         }
         user.setRole(role);
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
 
+        // ✅ 5️⃣ Return clean structured response including userId
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(Map.of(
+                        "success", true,
                         "message", "User registered successfully",
-                        "role", user.getRole()
+                        "data", Map.of(
+                                "userId", savedUser.getId(),
+                                "email", savedUser.getEmail(),
+                                "role", savedUser.getRole()
+                        )
                 ));
     }
 
