@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // ⚙️ Replace with your backend IP and port
-  static const String baseUrl = "http://192.168.1.40:8080";
+  static const String baseUrl = "http://192.168.1.41:8080";
 
   /// ✅ Generic POST request for reusability
   static Future<Map<String, dynamic>> postRequest(
@@ -15,12 +15,10 @@ class ApiService {
         body: jsonEncode(body),
       );
 
-      // Success (200 or 201)
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body);
       }
 
-      // Other responses (400, 500, etc.)
       return {
         "success": false,
         "message": "Error ${response.statusCode}: ${response.body}"
@@ -30,30 +28,114 @@ class ApiService {
     }
   }
 
-  /// 🔐 Login function (used by LoginScreen)
-  static Future<Map<String, dynamic>?> login(
+  /// 🔐 Login function
+  static Future<Map<String, dynamic>> login(
       String email, String password) async {
-    final url = Uri.parse("$baseUrl/api/auth/login");
+
+    final url = Uri.parse("$baseUrl/auth/login");
 
     try {
       final response = await http.post(
         url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email, "password": password}),
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: jsonEncode({
+          "email": email.trim(),
+          "password": password.trim(),
+        })
+
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data;
+      print("✅ STATUS CODE: ${response.statusCode}");
+      print("✅ RESPONSE BODY: ${response.body}");
+
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        return {
+          "success": true,
+          "data": jsonDecode(response.body),
+        };
       } else {
-        print("❌ LOGIN FAILED: ${response.statusCode}");
-        return null;
+        return {
+          "success": false,
+          "message": response.body,
+        };
       }
     } catch (e) {
-      print("⚠️ LOGIN NETWORK ERROR: $e");
-      return null;
+      print("❌ NETWORK ERROR: $e");
+      return {
+        "success": false,
+        "message": e.toString(),
+      };
     }
   }
+
+  /// 🔐 FORGOT PASSWORD – SEND OTP
+  static Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/auth/forgot-password"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email.trim(),
+        }),
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        "message": "Network error: $e",
+      };
+    }
+  }
+
+  /// 🔐 VERIFY OTP
+  static Future<Map<String, dynamic>> verifyOtp(
+      String email, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/auth/verify-otp"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email.trim(),
+          "otp": otp.trim(),
+        }),
+      );
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        "message": "Network error: $e",
+      };
+    }
+  }
+
+  /// 🔐 RESET PASSWORD
+  static Future<Map<String, dynamic>> resetPassword(
+      String resetToken, String newPassword) async {
+    try {
+      final response = await http.put(
+        Uri.parse("$baseUrl/api/user/reset-password"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "resetToken": resetToken,
+          "newPassword": newPassword,
+        }),
+      );
+      print(response.statusCode);
+      print(response.body);
+
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {"message": "Something went wrong"};
+    }
+  }
+
+
+
+
   static Future<String> bookToken(int userId, String serviceName) async {
     final response = await http.post(
       Uri.parse("$baseUrl/token/book"),
@@ -63,20 +145,25 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return "Token #${data['tokenNumber']} booked.\nPosition: ${data['position']}\nEstimated time: ${data['estimatedTime']}";
+      return "Token #${data['tokenNumber']} booked.\n"
+          "Position: ${data['position']}\n"
+          "Estimated time: ${data['estimatedTime']}";
     } else {
       return "Failed to book token.";
     }
   }
 
   static Future<List<Map<String, dynamic>>> getMyTokens(int userId) async {
-    final response = await http.get(Uri.parse("$baseUrl/token/my-tokens/$userId"));
+    final response =
+    await http.get(Uri.parse("$baseUrl/token/my-tokens/$userId"));
     if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
     }
     return [];
   }
-  static Future<Map<String, dynamic>> submitFeedback(Map<String, dynamic> data) async {
+
+  static Future<Map<String, dynamic>> submitFeedback(
+      Map<String, dynamic> data) async {
     final response = await http.post(
       Uri.parse("$baseUrl/feedback"),
       headers: {"Content-Type": "application/json"},
@@ -89,6 +176,110 @@ class ApiService {
       return {"message": "Error: ${response.body}"};
     }
   }
+  static Future<Map<String, dynamic>?> socialLogin(
+      String provider,
+      String token,
+      ) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/api/auth/social-login"),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "provider": provider,
+          "token": token,
+        }),
+      );
 
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        return null;
+      }
+    } catch (e) {
+      print("🔥 Social login error: $e");
+      return null;
+    }
+  }
+  static Future<bool> requestSignupOtp(String email) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/signup/requestOtp'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'email': email,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      final data = jsonDecode(response.body);
+      throw Exception(data['message'] ?? 'Failed to send OTP');
+    }
+
+  }
+
+  // ================= VERIFY SIGNUP OTP =================
+  static Future<String> verifySignupOtp({
+    required String email,
+    required String otp,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/signup/verifyOtp'),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'email': email,
+        'otp': otp,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['token']; // 👈 email verification token
+    } else {
+      final data = jsonDecode(response.body);
+      throw Exception(data['message'] ?? 'Invalid OTP');
+    }
+  }
+
+  // ================= FINAL SIGNUP =================
+  static Future<bool> signupUser({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    required String emailVerifiedToken,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/signup'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $emailVerifiedToken',
+      },
+      body: jsonEncode({
+        'name': name,
+        'email': email,
+        'password': password,
+        'phone': phone,
+      }),
+    );
+
+    if (response.statusCode == 201) {
+      return true;
+    } else {
+      final data = jsonDecode(response.body);
+      throw Exception(data['message'] ?? 'Signup failed');
+    }
+  }
 }
+
+
+
+
+
 

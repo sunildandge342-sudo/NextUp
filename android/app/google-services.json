@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1017541328459",
+    "project_id": "nextup02026",
+    "storage_bucket": "nextup02026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1017541328459:android:13ad6c4b0d3e8e431797ce",
+        "android_client_info": {
+          "package_name": "com.nextup"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfrjK7fURr4HCVP2EyytWeMIs9-3erGsk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

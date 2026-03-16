@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:nextup/screens/dashboard/dashboard_screen.dart';
 import 'package:nextup/services/api_services.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ ADDED
-import 'admin_dashboard.dart';
-import 'package:nextup/screens/dashboard/dashboard_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'service_provider_homepage.dart';
 import 'signup_screen.dart';
 import 'forget_password_email.dart';
-import 'package:nextup/services/google_auth_service.dart';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -43,7 +37,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final res = await ApiService.login(email, password);
       setState(() => isLoading = false);
 
-      // ✅ FIX: check success + use data object
       if (res["success"] == true && res["data"] != null) {
         final data = res["data"];
 
@@ -53,28 +46,33 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         final role = data["role"].toString().toUpperCase();
-        final userId = int.tryParse(data["userId"].toString()) ?? 0;
+        final int userId = data["userId"] as int;
+
+        // ✅ Read name saved during signup from SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        final String name = prefs.getString('userName') ?? '';
+
+        print("FINAL USER ID USED: $userId");
+        print("FINAL USER NAME USED: $name");
 
         if (role == 'SERVICE_PROVIDER') {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const AdminDashboard()),
+            MaterialPageRoute(
+              builder: (_) => ServiceProviderHomePage(providerId: userId),
+            ),
           );
         } else {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (_) => UserDashboard(userId: userId),
+              builder: (_) => UserDashboard(userId: userId, userName: name),
             ),
           );
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Invalid email or password',
-            ),
-          ),
+          const SnackBar(content: Text('Invalid email or password')),
         );
       }
     } catch (e) {
@@ -85,11 +83,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FF),
       body: Stack(
@@ -110,7 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // 🔳 Main Card
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -131,7 +125,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 🔠 Title
                     const Text(
                       "Welcome back",
                       style: TextStyle(
@@ -142,7 +135,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 30),
 
-                    // 📧 Email
                     _buildInputField(
                       controller: emailController,
                       label: "Email",
@@ -150,7 +142,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 18),
 
-                    // 🔒 Password
                     _buildInputField(
                       controller: passwordController,
                       label: "Password",
@@ -159,7 +150,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // 🔁 Remember / Forgot
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -179,11 +169,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         TextButton(
                           onPressed: () {
-
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const ForgotPasswordEmailScreen(),
+                                builder: (_) =>
+                                const ForgotPasswordEmailScreen(),
                               ),
                             );
                           },
@@ -196,7 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 18),
 
-                    // 🔵 Sign In Button
                     SizedBox(
                       width: double.infinity,
                       height: 54,
@@ -223,77 +212,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: Colors.white,
                           ),
                         ),
-
                       ),
                     ),
 
-                    const SizedBox(height: 26),
-                    const Text("Sign in with"),
-                    const SizedBox(height: 14),
-
-                    // 🌐 Social Icons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _socialButton(
-                            asset: 'assets/icons/google.png',
-                            label: 'Google',
-                            onTap: () async {
-                              final token = await GoogleAuthService.signIn();
-
-                              if (token == null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Google sign-in failed")),
-                                );
-                                return;
-                              }
-
-                              final data = await ApiService.socialLogin("GOOGLE", token);
-
-                              if (data == null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Social login failed")),
-                                );
-                                return;
-                              }
-
-                              // ✅ SAVE JWT
-                              final prefs = await SharedPreferences.getInstance();
-                              await prefs.setString('token', data['token']);
-                              await prefs.setInt('userId', data['userId']);
-                              await prefs.setString('role', data['role']);
-
-                              final role = data['role'].toString().toUpperCase();
-                              final userId = data['userId'] as int;
-
-                              // ✅ NAVIGATE
-                              if (role == 'SERVICE_PROVIDER') {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const AdminDashboard()),
-                                );
-                              } else {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => UserDashboard(userId: userId),
-                                  ),
-                                );
-                              }
-                            },
-
-
-                          ),
-                        ),
-
-
-                      ],
-                    ),
-
-
                     const SizedBox(height: 28),
 
-                    // 🔗 Sign Up
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -305,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                       child: const Text.rich(
                         TextSpan(
-                          text: "Don’t have an account? ",
+                          text: "Don't have an account? ",
                           style: TextStyle(fontSize: 16),
                           children: [
                             TextSpan(
@@ -329,7 +252,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // 🔹 Input field component
   Widget _buildInputField({
     required TextEditingController controller,
     required String label,
@@ -352,48 +274,6 @@ class _LoginScreenState extends State<LoginScreen> {
           borderRadius: BorderRadius.circular(16),
           borderSide:
           const BorderSide(color: Color(0xFF4A6CF7), width: 1.5),
-        ),
-      ),
-    );
-  }
-
-  // 🔹 Social icon
-  Widget _socialButton({
-    required String asset,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onTap,
-      child: Container(
-        height: 52,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: const Color(0xFFE2E6F3),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              asset,
-              height: 22,
-              width: 22,
-            ),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF2C3E50),
-              ),
-            ),
-          ],
         ),
       ),
     );

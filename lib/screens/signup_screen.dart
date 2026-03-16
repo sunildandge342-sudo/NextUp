@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:nextup/screens/admin_dashboard.dart';
+import 'package:nextup/screens/service_provider_homepage.dart';
 import 'dart:convert';
 import 'login_screen.dart';
 import 'package:nextup/services/facebook_auth_service.dart';
@@ -30,9 +30,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isServiceProvider = false;
 
 
-  final String baseUrl = "http://192.168.1.40:8080/api/auth/signup";
-
-  // ================= VALIDATION HELPERS =================
+  final String baseUrl = "http://192.168.1.41:8080/api/auth/signup";
 
   bool _isValidEmail(String email) {
     final emailRegex = RegExp(
@@ -42,7 +40,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   bool _isValidPhone(String phone) {
-    final phoneRegex = RegExp(r'^[6-9]\d{9}$'); // Indian format
+    final phoneRegex = RegExp(r'^[6-9]\d{9}$');
     return phoneRegex.hasMatch(phone);
   }
 
@@ -69,7 +67,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController otpController = TextEditingController();
 
 
-  // ================= REGISTER USER =================
   Future<void> _requestOtp() async {
     final email = emailController.text.trim();
 
@@ -126,7 +123,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     if (!_formKey.currentState!.validate()) return;
 
-    // 🔐 Ensure OTP is verified
     if (!isOtpVerified || emailVerifiedToken == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please verify your email first')),
@@ -136,11 +132,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     setState(() => _isLoading = true);
 
-    final url = Uri.parse("http://192.168.1.40:8080/auth/signup");
+    final url = Uri.parse("http://192.168.1.41:8080/auth/signup");
 
     final headers = {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer $emailVerifiedToken', // ✅ THIS WAS MISSING
+      'Authorization': 'Bearer $emailVerifiedToken',
     };
 
     final body = {
@@ -156,6 +152,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
       await http.post(url, headers: headers, body: jsonEncode(body));
 
       if (response.statusCode == 201) {
+
+        // ✅ FIX: Save name to SharedPreferences so login screen can read it
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('userName', nameController.text.trim());
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("✅ Account created successfully. Please login."),
@@ -166,23 +167,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
           context,
           MaterialPageRoute(builder: (_) => const LoginScreen()),
         );
+
       } else {
+
         final error = jsonDecode(response.body);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error['message'] ?? 'Signup failed')),
         );
       }
+
     } catch (e) {
+
+      print("REGISTER ERROR: $e");
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("⚠️ Server not reachable")),
+        SnackBar(content: Text("⚠️ Error: $e")),
       );
+
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
-
-  // ================= UI =================
 
   @override
   Widget build(BuildContext context) {
@@ -245,32 +252,31 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 : AutovalidateMode.disabled,
                             child: Column(
                               children: [
-                              _buildField(
-                              controller: nameController,
-                              label: 'Full Name',
-                              icon: Icons.person_outline,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Full name is required';
-                                }
+                                _buildField(
+                                  controller: nameController,
+                                  label: 'Full Name',
+                                  icon: Icons.person_outline,
+                                  validator: (v) {
+                                    if (v == null || v.trim().isEmpty) {
+                                      return 'Full name is required';
+                                    }
 
-                                final name = v.trim();
+                                    final name = v.trim();
 
-                                if (!RegExp(r'^[A-Za-z ]+$').hasMatch(name)) {
-                                  return 'Name must contain only letters';
-                                }
+                                    if (!RegExp(r'^[A-Za-z ]+$').hasMatch(name)) {
+                                      return 'Name must contain only letters';
+                                    }
 
-                                if (name.length < 2) {
-                                  return 'Name must be at least 2 characters';
-                                }
+                                    if (name.length < 2) {
+                                      return 'Name must be at least 2 characters';
+                                    }
 
-                                return null;
-                              },
-                            ),
+                                    return null;
+                                  },
+                                ),
 
                                 const SizedBox(height: 12),
 
-// -------- EMAIL FIELD --------
                                 _buildField(
                                   controller: emailController,
                                   label: 'Email',
@@ -299,7 +305,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                                 const SizedBox(height: 8),
 
-// -------- SEND OTP BUTTON (ONLY BEFORE OTP SECTION OPENS) --------
                                 if (isEmailValid && !showOtpSection)
                                   SizedBox(
                                     width: double.infinity,
@@ -326,8 +331,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                           )
                                               : const LinearGradient(
                                             colors: [
-                                              Color(0xFF6A5AE0), // premium purple
-                                              Color(0xFF4D9DE0), // soft blue
+                                              Color(0xFF6A5AE0),
+                                              Color(0xFF4D9DE0),
                                             ],
                                           ),
                                           borderRadius: BorderRadius.circular(14),
@@ -356,7 +361,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     ),
                                   ),
 
-                                // -------- OTP SECTION (APPEARS AFTER OTP IS SENT) --------
                                 if (showOtpSection) ...[
                                   const SizedBox(height: 12),
 
@@ -429,11 +433,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     ),
                                   ),
                                 ],
-
-
-
-
-
 
                                 const SizedBox(height: 12),
                                 _buildField(
@@ -534,8 +533,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     decoration: BoxDecoration(
                                       gradient: const LinearGradient(
                                         colors: [
-                                          Color(0xFF6A8CFF), // light blue
-                                          Color(0xFF4A6CF7), // primary blue
+                                          Color(0xFF6A8CFF),
+                                          Color(0xFF4A6CF7),
                                         ],
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
@@ -588,7 +587,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     color: Color(0xFF6B7280),
                                     fontWeight: FontWeight.w500,
                                   ),
-
                                 ),
 
                                 const SizedBox(height: 14),
@@ -618,38 +616,36 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                             return;
                                           }
 
-                                          // ✅ SAVE JWT
                                           final prefs = await SharedPreferences.getInstance();
                                           await prefs.setString('token', data['token']);
 
                                           final role = data['role'].toString().toUpperCase();
                                           final userId = int.tryParse(data['userId'].toString()) ?? 0;
+                                          final name = data['name'].toString();
 
-                                          // ✅ NAVIGATE (SAME AS NORMAL LOGIN)
                                           if (role == 'SERVICE_PROVIDER') {
                                             Navigator.pushReplacement(
                                               context,
-                                              MaterialPageRoute(builder: (_) => const AdminDashboard()),
+                                              MaterialPageRoute(
+                                                builder: (_) => ServiceProviderHomePage(providerId: userId),
+                                              ),
                                             );
                                           } else {
                                             Navigator.pushReplacement(
                                               context,
                                               MaterialPageRoute(
-                                                builder: (_) => UserDashboard(userId: userId),
+                                                builder: (_) => UserDashboard(
+                                                  userId: userId,
+                                                  userName: name,
+                                                ),
                                               ),
                                             );
                                           }
                                         },
-
-                                        // Google signup logic (same as login)
-
                                       ),
                                     ),
-
                                   ],
                                 ),
-
-
                               ],
                             ),
                           ),
@@ -722,6 +718,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               (v) => v == null || v.trim().isEmpty ? 'Enter $label' : null,
     );
   }
+
   Widget _socialButton({
     required String asset,
     required String label,
@@ -743,11 +740,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              asset,
-              height: 22,
-              width: 22,
-            ),
+            Image.asset(asset, height: 22, width: 22),
             const SizedBox(width: 10),
             Text(
               label,
